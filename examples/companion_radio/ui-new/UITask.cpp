@@ -5,6 +5,10 @@
 #ifdef WIFI_SSID
   #include <WiFi.h>
 #endif
+#if ENABLE_TRACCAR
+  #include <WiFi.h>
+  #include "../../traccar_gps/TraccarUi.h"
+#endif
 
 #ifndef AUTO_OFF_MILLIS
   #define AUTO_OFF_MILLIS     15000   // 15 seconds
@@ -84,6 +88,9 @@ class HomeScreen : public UIScreen {
     ADVERT,
 #if ENV_INCLUDE_GPS == 1
     GPS,
+#endif
+#if ENABLE_TRACCAR
+    TRACCAR,
 #endif
 #if UI_SENSORS_PAGE == 1
     SENSORS,
@@ -319,6 +326,74 @@ public:
         display.drawTextRightAlign(display.width()-1, y, buf);
         y = y + 12;
       }
+#endif
+#if ENABLE_TRACCAR
+    } else if (_page == HomePage::TRACCAR) {
+      const TraccarConfig* cfg = TraccarService::getConfig();
+      display.setColor(DisplayDriver::GREEN);
+      display.setTextSize(1);
+      int y = 16;
+      char buf[48];
+
+      display.drawTextLeftAlign(0, y, "Traccar");
+      y += 11;
+
+      display.drawTextLeftAlign(0, y, "WiFi");
+      if (WiFi.status() == WL_CONNECTED) {
+        IPAddress ip = WiFi.localIP();
+        snprintf(buf, sizeof(buf), "OK %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      } else if (cfg && cfg->wifi_ssid[0]) {
+        strcpy(buf, "...");
+      } else {
+        strcpy(buf, "no ssid");
+      }
+      display.drawTextRightAlign(display.width() - 1, y, buf);
+      y += 11;
+
+      if (cfg) {
+        display.drawTextLeftAlign(0, y, "ID");
+        display.drawTextRightAlign(display.width() - 1, y, cfg->traccar_device_id);
+        y += 11;
+
+        display.drawTextLeftAlign(0, y, "srv");
+        snprintf(buf, sizeof(buf), "%.14s:%u", cfg->traccar_host, (unsigned)cfg->traccar_port);
+        display.drawTextRightAlign(display.width() - 1, y, buf);
+        y += 11;
+
+        display.drawTextLeftAlign(0, y, "int");
+        snprintf(buf, sizeof(buf), "%lus", (unsigned long)(cfg->report_interval_ms / 1000));
+        display.drawTextRightAlign(display.width() - 1, y, buf);
+        y += 11;
+      }
+
+      display.drawTextLeftAlign(0, y, "TX");
+      switch (TraccarService::getTxStatus()) {
+        case TRACCAR_TX_OK: {
+          uint32_t ago = (TraccarService::getLastTxAttemptMs() > 0)
+            ? (millis() - TraccarService::getLastTxAttemptMs()) / 1000
+            : 0;
+          snprintf(buf, sizeof(buf), "OK %lus", (unsigned long)ago);
+          display.setColor(DisplayDriver::GREEN);
+          break;
+        }
+        case TRACCAR_TX_FAIL:
+          snprintf(buf, sizeof(buf), "err %d", TraccarService::getLastHttpCode());
+          display.setColor(DisplayDriver::RED);
+          break;
+        case TRACCAR_TX_WAIT_WIFI:
+          strcpy(buf, "wait WiFi");
+          display.setColor(DisplayDriver::YELLOW);
+          break;
+        case TRACCAR_TX_WAIT_GPS:
+          strcpy(buf, "wait GPS");
+          display.setColor(DisplayDriver::YELLOW);
+          break;
+        default:
+          strcpy(buf, "--");
+          display.setColor(DisplayDriver::LIGHT);
+          break;
+      }
+      display.drawTextRightAlign(display.width() - 1, y, buf);
 #endif
 #if UI_SENSORS_PAGE == 1
     } else if (_page == HomePage::SENSORS) {

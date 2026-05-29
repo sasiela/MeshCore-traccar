@@ -22,4 +22,10 @@ public:
     virtual void stop() = 0;
     virtual void loop() = 0;
     virtual bool isEnabled() = 0;
+    /** Speed (knots) and bearing (degrees 0–360) from RMC when available. */
+    virtual bool getSpeedAndBearing(float& speed_knots, float& bearing_deg) {
+      speed_knots = NAN;
+      bearing_deg = NAN;
+      return false;
+    }
 };

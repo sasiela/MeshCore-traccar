@@ -3,6 +3,11 @@
 #include <Arduino.h> // needed for PlatformIO
 #include <Mesh.h>
 
+#if ENABLE_TRACCAR
+  #include "../traccar_gps/TraccarSettings.h"
+  extern TraccarSettings g_traccar_settings;
+#endif
+
 #define CMD_APP_START                 1
 #define CMD_SEND_TXT_MSG              2
 #define CMD_SEND_CHANNEL_TXT_MSG      3
@@ -1761,14 +1766,21 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_GET_CUSTOM_VARS) {
     out_frame[0] = RESP_CODE_CUSTOM_VARS;
     char *dp = (char *)&out_frame[1];
-    for (int i = 0; i < sensors.getNumSettings() && dp - (char *)&out_frame[1] < 140; i++) {
+#if ENABLE_TRACCAR
+    SensorManager& settings = g_traccar_settings;
+    const int max_custom_vars = 220;
+#else
+    SensorManager& settings = sensors;
+    const int max_custom_vars = 140;
+#endif
+    for (int i = 0; i < settings.getNumSettings() && dp - (char *)&out_frame[1] < max_custom_vars; i++) {
       if (i > 0) {
         *dp++ = ',';
       }
-      strcpy(dp, sensors.getSettingName(i));
+      strcpy(dp, settings.getSettingName(i));
       dp = strchr(dp, 0);
       *dp++ = ':';
-      strcpy(dp, sensors.getSettingValue(i));
+      strcpy(dp, settings.getSettingValue(i));
       dp = strchr(dp, 0);
     }
     _serial->writeFrame(out_frame, dp - (char *)out_frame);
@@ -1778,7 +1790,11 @@ void MyMesh::handleCmdFrame(size_t len) {
     char *np = strchr(sp, ':'); // look for separator char
     if (np) {
       *np++ = 0; // modify 'cmd_frame', replace ':' with null
+#if ENABLE_TRACCAR
+      bool success = g_traccar_settings.setSettingValue(sp, np);
+#else
       bool success = sensors.setSettingValue(sp, np);
+#endif
       if (success) {
         #if ENV_INCLUDE_GPS == 1
         // Update node preferences for GPS settings

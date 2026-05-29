@@ -32,6 +32,13 @@ static uint32_t _atoi(const char* sp) {
 #elif defined(ESP32)
   #include <SPIFFS.h>
   DataStore store(SPIFFS, rtc_clock);
+  #if ENABLE_TRACCAR
+    #include "../traccar_gps/TraccarConfig.h"
+    #include "../traccar_gps/TraccarSettings.h"
+    #include "../traccar_gps/TraccarService.h"
+    TraccarConfig g_traccar_cfg;
+    TraccarSettings g_traccar_settings(g_traccar_cfg, sensors);
+  #endif
 #endif
 
 #ifdef ESP32
@@ -217,6 +224,11 @@ void setup() {
   the_mesh.applyGpsPrefs();
 #endif
 
+#if ENABLE_TRACCAR
+  TraccarService::bind(g_traccar_cfg, g_traccar_settings);
+  TraccarService::begin(board);
+#endif
+
 #ifdef DISPLAY_CLASS
   ui_task.begin(disp, &sensors, the_mesh.getNodePrefs());  // still want to pass this in as dependency, as prefs might be moved
 #endif
@@ -225,6 +237,9 @@ void setup() {
 void loop() {
   the_mesh.loop();
   sensors.loop();
+#if ENABLE_TRACCAR
+  TraccarService::loop(board, sensors);
+#endif
 #ifdef DISPLAY_CLASS
   ui_task.loop();
 #endif

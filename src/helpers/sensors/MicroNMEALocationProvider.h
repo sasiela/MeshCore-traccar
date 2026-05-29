@@ -125,7 +125,18 @@ public :
     long getTimestamp() override { 
         DateTime dt(nmea.getYear(), nmea.getMonth(),nmea.getDay(),nmea.getHour(),nmea.getMinute(),nmea.getSecond());
         return dt.unixtime();
-    } 
+    }
+
+    bool getSpeedAndBearing(float& speed_knots, float& bearing_deg) override {
+        long s = nmea.getSpeed();
+        long c = nmea.getCourse();
+        if (s == LONG_MIN) {
+            return false;
+        }
+        speed_knots = s / 1000.0f;
+        bearing_deg = (c == LONG_MIN) ? NAN : (c / 1000.0f);
+        return true;
+    }
 
     void sendSentence(const char *sentence) override {
         nmea.sendSentence(*_gps_serial, sentence);
