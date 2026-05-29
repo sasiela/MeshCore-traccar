@@ -7,7 +7,7 @@ static int sensorSettingCount(const SensorManager& s) {
 }
 
 int TraccarSettings::getNumSettings() const {
-  return sensorSettingCount(_sensors) + 6;
+  return sensorSettingCount(_sensors) + 8;
 }
 
 const char* TraccarSettings::getSettingName(int i) const {
@@ -19,10 +19,12 @@ const char* TraccarSettings::getSettingName(int i) const {
   switch (i) {
     case 0: return "wifi_ssid";
     case 1: return "wifi_pwd";
-    case 2: return "traccar_host";
-    case 3: return "traccar_port";
-    case 4: return "traccar_id";
-    case 5: return "report_sec";
+    case 2: return "wifi_ssid2";
+    case 3: return "wifi_pwd2";
+    case 4: return "traccar_host";
+    case 5: return "traccar_port";
+    case 6: return "traccar_id";
+    case 7: return "report_sec";
     default: return NULL;
   }
 }
@@ -37,12 +39,14 @@ const char* TraccarSettings::getSettingValue(int i) const {
   switch (i) {
     case 0: return _cfg.wifi_ssid;
     case 1: return _cfg.wifi_pwd;
-    case 2: return _cfg.traccar_host;
-    case 3:
+    case 2: return _cfg.wifi_ssid_backup;
+    case 3: return _cfg.wifi_pwd_backup;
+    case 4: return _cfg.traccar_host;
+    case 5:
       snprintf(buf, sizeof(buf), "%u", (unsigned)_cfg.traccar_port);
       return buf;
-    case 4: return _cfg.traccar_device_id;
-    case 5:
+    case 6: return _cfg.traccar_device_id;
+    case 7:
       snprintf(buf, sizeof(buf), "%lu", (unsigned long)(_cfg.report_interval_ms / 1000));
       return buf;
     default: return NULL;
@@ -63,6 +67,20 @@ bool TraccarSettings::setSettingValue(const char* name, const char* value) {
   if (strcmp(name, "wifi_pwd") == 0) {
     strncpy(_cfg.wifi_pwd, value, sizeof(_cfg.wifi_pwd) - 1);
     _cfg.wifi_pwd[sizeof(_cfg.wifi_pwd) - 1] = 0;
+    _wifi_changed = true;
+    _cfg.save();
+    return true;
+  }
+  if (strcmp(name, "wifi_ssid2") == 0) {
+    strncpy(_cfg.wifi_ssid_backup, value, sizeof(_cfg.wifi_ssid_backup) - 1);
+    _cfg.wifi_ssid_backup[sizeof(_cfg.wifi_ssid_backup) - 1] = 0;
+    _wifi_changed = true;
+    _cfg.save();
+    return true;
+  }
+  if (strcmp(name, "wifi_pwd2") == 0) {
+    strncpy(_cfg.wifi_pwd_backup, value, sizeof(_cfg.wifi_pwd_backup) - 1);
+    _cfg.wifi_pwd_backup[sizeof(_cfg.wifi_pwd_backup) - 1] = 0;
     _wifi_changed = true;
     _cfg.save();
     return true;

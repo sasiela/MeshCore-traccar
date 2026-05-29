@@ -341,7 +341,8 @@ public:
       display.drawTextLeftAlign(0, y, "WiFi");
       if (WiFi.status() == WL_CONNECTED) {
         IPAddress ip = WiFi.localIP();
-        snprintf(buf, sizeof(buf), "OK %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        const char net = (TraccarService::getActiveWifiIndex() == 0) ? '1' : '2';
+        snprintf(buf, sizeof(buf), "OK%c %d.%d.%d.%d", net, ip[0], ip[1], ip[2], ip[3]);
       } else if (cfg && cfg->wifi_ssid[0]) {
         strcpy(buf, "...");
       } else {

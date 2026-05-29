@@ -4,11 +4,15 @@
 #ifdef ESP32_PLATFORM
   #include <helpers/ESP32Board.h>
 #endif
+#if ENABLE_TRACCAR_WEB
+  #include "TraccarWebServer.h"
+#endif
 
 TraccarConfig* TraccarService::_cfg = NULL;
 TraccarSettings* TraccarService::_settings = NULL;
 uint32_t TraccarService::_last_send_ms = 0;
 uint32_t TraccarService::_last_wifi_attempt_ms = 0;
+uint8_t TraccarService::_wifi_index = 0;
 uint32_t TraccarService::_last_tx_attempt_ms = 0;
 int TraccarService::_last_http_code = 0;
 TraccarTxStatus TraccarService::_last_tx_status = TRACCAR_TX_NONE;
@@ -17,6 +21,9 @@ bool TraccarService::_ntp_done = false;
 void TraccarService::bind(TraccarConfig& cfg, TraccarSettings& settings) {
   _cfg = &cfg;
   _settings = &settings;
+#if ENABLE_TRACCAR_WEB
+  TraccarWebServer::bind(cfg, settings);
+#endif
 }
 
 int TraccarService::batteryPercent(uint16_t mv) {
@@ -25,13 +32,23 @@ int TraccarService::batteryPercent(uint16_t mv) {
   return (int)((mv - 3300) * 100 / 900);
 }
 
-void TraccarService::wifiStart() {
-  if (!_cfg || _cfg->wifi_ssid[0] == 0) {
+bool TraccarService::hasBackupWifi() {
+  return _cfg && _cfg->wifi_ssid_backup[0] != 0;
+}
+
+void TraccarService::wifiStartIndex(uint8_t index) {
+  if (!_cfg) {
     return;
   }
+  const char* ssid = (index == 0) ? _cfg->wifi_ssid : _cfg->wifi_ssid_backup;
+  const char* pwd = (index == 0) ? _cfg->wifi_pwd : _cfg->wifi_pwd_backup;
+  if (!ssid || ssid[0] == 0) {
+    return;
+  }
+  _wifi_index = index;
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  WiFi.begin(_cfg->wifi_ssid, _cfg->wifi_pwd);
+  WiFi.begin(ssid, pwd);
   _last_wifi_attempt_ms = millis();
 }
 
@@ -41,6 +58,7 @@ bool TraccarService::wifiEnsureConnected() {
   }
   if (_settings->consumeWifiChanged()) {
     WiFi.disconnect();
+    _wifi_index = 0;
     _last_wifi_attempt_ms = 0;
   }
   if (WiFi.status() == WL_CONNECTED) {
@@ -50,7 +68,15 @@ bool TraccarService::wifiEnsureConnected() {
   if ((uint32_t)(now - _last_wifi_attempt_ms) < 10000) {
     return false;
   }
-  wifiStart();
+  if (_wifi_index == 0) {
+    if (hasBackupWifi()) {
+      wifiStartIndex(1);
+    } else if (_cfg->wifi_ssid[0] != 0) {
+      wifiStartIndex(0);
+    }
+  } else {
+    wifiStartIndex(0);
+  }
   return false;
 }
 
@@ -130,7 +156,11 @@ void TraccarService::begin(mesh::MainBoard& board) {
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     _ntp_done = true;
   }
-  wifiStart();
+  if (_cfg->wifi_ssid[0] != 0) {
+    wifiStartIndex(0);
+  } else if (hasBackupWifi()) {
+    wifiStartIndex(1);
+  }
 }
 
 void TraccarService::loop(mesh::MainBoard& board, SensorManager& sensors) {
@@ -141,6 +171,9 @@ void TraccarService::loop(mesh::MainBoard& board, SensorManager& sensors) {
     _last_tx_status = TRACCAR_TX_WAIT_WIFI;
     return;
   }
+#if ENABLE_TRACCAR_WEB
+  TraccarWebServer::tick(board, sensors);
+#endif
   uint32_t now = millis();
   if ((uint32_t)(now - _last_send_ms) < _cfg->report_interval_ms) {
     return;

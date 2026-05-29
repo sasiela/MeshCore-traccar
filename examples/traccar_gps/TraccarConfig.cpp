@@ -7,6 +7,25 @@
 
 static const char* PREFS_FILE = "/traccar_prefs.bin";
 
+#ifndef WIFI_SSID_BACKUP
+#define WIFI_SSID_BACKUP "SMART_HOME"
+#endif
+#ifndef WIFI_PWD_BACKUP
+#define WIFI_PWD_BACKUP "domoticz5"
+#endif
+
+// Layout before backup Wi-Fi fields (SPIFFS migration).
+struct TraccarConfigV1 {
+  char wifi_ssid[33];
+  char wifi_pwd[65];
+  char traccar_host[64];
+  uint16_t traccar_port;
+  char traccar_device_id[32];
+  uint32_t report_interval_ms;
+  uint32_t ble_pin;
+  char node_name[32];
+};
+
 void TraccarConfig::setDefaults() {
 #ifndef WIFI_SSID
 #define WIFI_SSID "CAR"
@@ -24,11 +43,13 @@ void TraccarConfig::setDefaults() {
 #define TRACCAR_INTERVAL_MS 30000
 #endif
 #ifndef BLE_PIN_CODE
-#define BLE_PIN_CODE 123456
+#define BLE_PIN_CODE 409494
 #endif
 
   strncpy(wifi_ssid, WIFI_SSID, sizeof(wifi_ssid) - 1);
   strncpy(wifi_pwd, WIFI_PWD, sizeof(wifi_pwd) - 1);
+  strncpy(wifi_ssid_backup, WIFI_SSID_BACKUP, sizeof(wifi_ssid_backup) - 1);
+  strncpy(wifi_pwd_backup, WIFI_PWD_BACKUP, sizeof(wifi_pwd_backup) - 1);
   strncpy(traccar_host, TRACCAR_HOST, sizeof(traccar_host) - 1);
   traccar_port = TRACCAR_PORT;
   setDeviceIdFromBleMac();
@@ -61,7 +82,26 @@ bool TraccarConfig::load() {
   if (!f) {
     return false;
   }
-  bool ok = f.read((uint8_t*)this, sizeof(TraccarConfig)) == sizeof(TraccarConfig);
+  size_t file_size = f.size();
+  bool ok = false;
+  if (file_size == sizeof(TraccarConfig)) {
+    ok = f.read((uint8_t*)this, sizeof(TraccarConfig)) == sizeof(TraccarConfig);
+  } else if (file_size == sizeof(TraccarConfigV1)) {
+    TraccarConfigV1 old_cfg;
+    ok = f.read((uint8_t*)&old_cfg, sizeof(old_cfg)) == sizeof(old_cfg);
+    if (ok) {
+      memcpy(wifi_ssid, old_cfg.wifi_ssid, sizeof(wifi_ssid));
+      memcpy(wifi_pwd, old_cfg.wifi_pwd, sizeof(wifi_pwd));
+      wifi_ssid_backup[0] = 0;
+      wifi_pwd_backup[0] = 0;
+      memcpy(traccar_host, old_cfg.traccar_host, sizeof(traccar_host));
+      traccar_port = old_cfg.traccar_port;
+      memcpy(traccar_device_id, old_cfg.traccar_device_id, sizeof(traccar_device_id));
+      report_interval_ms = old_cfg.report_interval_ms;
+      ble_pin = old_cfg.ble_pin;
+      memcpy(node_name, old_cfg.node_name, sizeof(node_name));
+    }
+  }
   f.close();
   if (traccar_port == 0) {
     traccar_port = 5055;
@@ -71,11 +111,19 @@ bool TraccarConfig::load() {
   }
   wifi_ssid[sizeof(wifi_ssid) - 1] = 0;
   wifi_pwd[sizeof(wifi_pwd) - 1] = 0;
+  wifi_ssid_backup[sizeof(wifi_ssid_backup) - 1] = 0;
+  wifi_pwd_backup[sizeof(wifi_pwd_backup) - 1] = 0;
   traccar_host[sizeof(traccar_host) - 1] = 0;
   traccar_device_id[sizeof(traccar_device_id) - 1] = 0;
   node_name[sizeof(node_name) - 1] = 0;
   if (!ok || traccar_device_id[0] == 0 || strcmp(traccar_device_id, "car1") == 0) {
     setDeviceIdFromBleMac();
+  }
+  if (wifi_ssid_backup[0] == 0) {
+    strncpy(wifi_ssid_backup, WIFI_SSID_BACKUP, sizeof(wifi_ssid_backup) - 1);
+    strncpy(wifi_pwd_backup, WIFI_PWD_BACKUP, sizeof(wifi_pwd_backup) - 1);
+    wifi_ssid_backup[sizeof(wifi_ssid_backup) - 1] = 0;
+    wifi_pwd_backup[sizeof(wifi_pwd_backup) - 1] = 0;
   }
   return ok;
 }
